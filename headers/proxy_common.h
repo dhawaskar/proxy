@@ -20,7 +20,7 @@
 using namespace std;
 extern int sfd,cfd,port;
 extern struct sockaddr_in servaddr,cliaddr;
-socklen_t client_len=sizeof(cliaddr);
+extern socklen_t client_len;
 
 
 
@@ -37,7 +37,8 @@ void proxy_check_arg(int count,char **arg){
 
 } 
 
-void proxy_create_socket(){
+int proxy_create_socket(){
+	int sfd;
 	cout<<"Creating the TCP socket to listen to clients"<<endl;
 	sfd=socket(AF_INET,SOCK_STREAM, 0);
 	if(sfd<0){
@@ -47,7 +48,8 @@ void proxy_create_socket(){
 	}
 	else{
 		cout<<"Scoket is created:"<<sfd<<endl;
-	}	
+	}
+	return sfd;	
 }
 
 void proxy_initialise_socket(){
