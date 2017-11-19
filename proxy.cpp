@@ -92,12 +92,12 @@ void get_server_process(){
 		}
 		cout<<"Receive the response from main server"<<endl;
 		bzero(buf,MAXLINE);
+		fd.open("main_server_resp",fstream::out);
 		n=recv(mfd,buf,MAXLINE,0);
 		if(n<0){
 			perror("recv");
 		}
 		cout<<"Received from main server\n"<<buf<<endl;
-		fd.open("main_server_resp",fstream::out);
 		fd.write(buf,n);	
 		fd.close();
 	}		
