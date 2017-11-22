@@ -9,98 +9,192 @@ using namespace std;
 int sfd,cfd,mfd,port,server_port;
 struct sockaddr_in servaddr,cliaddr,main_addr;
 socklen_t client_len=sizeof(cliaddr);
-vector <string> sv; 
-char header[MAXLINE],server_name[MAX],header_server[MAXLINE],header_client[MAXLINE],ip_address[MAX];
-
+vector <string> sv;
+vector <string> sv1; 
+char header[MAXLINE],server_name[MAX],header_server[MAXLINE],header_client[MAXLINE],ip_address[MAX],cached_ip[MAX];
 
 char * header_generation(){
 	cout<<"Header generation"<<endl;
 	int len;
+	char server[MAX];
+	bzero(server,MAX);
+        strncpy(server,server_name,strlen(server_name));
+        strtok(server,"/");
+        strcpy(server,strtok(NULL,"/"));
+        cout<<"The server name should be ****************\t"<<server<<endl;
 	bzero(header,MAXLINE);
 	strncpy(header,"GET ",strlen("GET "));
-	strncat(header,server_name,strlen(server_name));
+	//strncat(header,server_name,strlen(server_name));
+	strncat(header,"/index.html",strlen("/index.html"));
+	//strncat(header,"/",1);
 	strncat(header," ",1);
 	strncat(header,sv[2].c_str(),strlen(sv[2].c_str()));
-	/*strncat(header,"\r\n",2);
+	strncat(header,"\r\n",2);
 	strncat(header,"Host: ",strlen("Host: "));
-	strncat(header,server_name,strlen(server_name));
+	//strncat(header,sv1[1].c_str(),strlen(sv1[1].c_str()));
+	strncat(header,server,strlen(server));
 	strncat(header,"\r\n",2);
 	strncat(header,"Connection: Close",strlen("Connection: Close"));
-	strncat(header,"\r\n",2);*/
+	strncat(header,"\r\n\r\n",4);
 	len=strlen(header);
 	header[len]='\0';
-	cout<<"Header length is \t"<<len<<endl;
+	//cout<<"Header length is \t"<<len<<endl;
 	return header;
 }
 
 
-int hostname_to_ip(char hostname[MAX])
-{
-	struct hostent *he;
-    struct in_addr **addr_list;
-    int i,len;
-	strcpy(hostname,strtok(hostname,"/"));
-	len=strlen(hostname);
-	hostname[len]='\0';
-    if ( (he = gethostbyname( hostname ) ) == NULL)
-    {
-        // get the host info
-        herror("gethostbyname");
-        return 1;
-    }
 
-    addr_list = (struct in_addr **) he->h_addr_list;
-
-	bzero(ip_address,MAX);
-    for(i = 0; addr_list[i] != NULL; i++)
-    {
-        //Return the first one;
-        strcpy(ip_address , inet_ntoa(*addr_list[i]) );
-        return 0;
-    }
-
-    return 1;
+void send_response_client(){
+	//create the response file from server
+        char buf[MAXLINE],file_type[MAX],header[MAXLINE],file_size_str[MAX],filename[MAX];
+	int n,file_size,m,len;
+        bzero(file_type,MAX);
+	bzero(filename,MAX);
+	strcpy(filename,"response.html");
+	filename[strlen(filename)]='\0';
+        fstream fd,fd1,fd2;
+        fd.open("main_server_resp",fstream::in|fstream::binary);
+        fd1.open(filename,fstream::out|fstream::binary);
+        if(fd.fail())   perror("open");
+        bzero(buf,MAXLINE);
+        while(fd.getline(buf,MAXLINE)){
+                /*if(strstr(buf,"Content-Type:")){
+                        strtok(buf," ");
+                        strcpy(file_type,strtok(NULL,"NULL"));
+                        cout<<"File type is \t"<<file_type<<endl;
+                }*/
+                if(strlen(buf)==1){
+                        while(fd.getline(buf,MAXLINE)){
+                                fd1.write(buf,strlen(buf)-1);
+				fd1.write("\r\n",2);
+                        }
+                        fd1.close();
+                        break;
+                }
+                bzero(buf,MAXLINE);
+        }
+	//calculate the file_size
+	file_size=proxy_calculate_size(filename);
+	//send the file to server
+	bzero(header,MAXLINE);
+	strcpy(header,"HTTP/1.1 200 OK\r\nContent-Length:");
+	sprintf(file_size_str,"%d",file_size);
+	len=strlen(file_size_str);
+	file_size_str[len]='\0';
+	cout<<"The file size obtained is "<<file_size_str<<endl;
+	strcat(header,file_size_str);	
+	strcat(header,"\r\nContent-Type: text/html\r\nConnection: Keepalive\r\n\r\n");
+	cout<<"header to be sent to client is \n"<<header<<endl;
+	n=send(cfd,header,strlen(header),0);
+	if(n<0) perror("send header to client");
+	//now send the actual file
+	if(file_size>0){
+		fd2.open(filename,fstream::in|fstream::binary);
+		if(fd2.fail()){
+			cout<<"you are in"<<__FUNCTION__<<endl;
+			perror("open:");
+		}
+		else{
+			bzero(buf,MAXLINE);
+			while(fd2.read(buf,file_size)){
+				send(cfd,buf,file_size,0);
+				bzero(buf,MAXLINE);
+			}
+			cout<<"Sent the complete file to client"<<endl;
+		}
+	}
+	//Still need to figure out *************
+	else{
+		cout<<"Nothing is received from client"<<endl;
+		fd2.open("test.html",fstream::in|fstream::binary);
+                if(fd2.fail()){
+                        cout<<"you are in"<<__FUNCTION__<<endl;
+                        perror("open:");
+                }
+                else{
+                        bzero(buf,MAX);
+                        while(fd2.read(buf,190)){
+                                send(cfd,buf,190,0);
+                                bzero(buf,MAXLINE);
+                        }
+                }
+	}
 }
 
+
 void get_server_process(){
-	char *temp,buf[MAXLINE];
+	char *temp,buf[MAXLINE],header_err[MAXLINE],serv_buff[MAX];
 	int len,n;
 	fstream fd;
 	cout<<"Lets talk to main server:\t"<<server_name<<"\tat port:\t"<<server_port<<endl;
-	hostname_to_ip(strstr(server_name,"www."));
-	cout<<"IP address is \t"<<ip_address<<endl;
-	main_addr.sin_family = AF_INET;
-	main_addr.sin_addr.s_addr =inet_addr(ip_address);
-	main_addr.sin_port = htons(server_port); 
-	mfd=proxy_create_socket();
-	if(connect(mfd,(struct sockaddr *)&main_addr,sizeof(main_addr))<0){
-		cout<<"I am in \t"<<__FUNCTION__<<endl;
-		perror("connect:");
-		return;
+	bzero(serv_buff,MAX);
+	strcpy(serv_buff,strstr(server_name,"www."));
+	serv_buff[strlen(serv_buff)]='\0';
+	if(proxy_is_cache_server(serv_buff)){
+		cout<<"Server entry is already cached"<<endl;
+		cout<<"Got the cached IP address"<<cached_ip<<endl;
+		strcpy(ip_address,cached_ip);
 	}
 	else{
-		cout<<"Connection is establised with\t"<<server_name<<endl;
-		temp=header_generation();
-		len=strlen(temp);
-		strncpy(header_server,temp,len);
-		header_server[len]='\0';
-		cout<<"generated header to send to main server:\n"<<header_server<<endl;
-		if(n=sendto(mfd,header_server,len,0,(struct sockaddr *)&main_addr,sizeof(main_addr))<0)
-			perror("sendto");	
+		cout<<"server entry is not cached yet and lets add it"<<endl;
+		proxy_hostname_to_ip(serv_buff);
+		cout<<"Got new IP address is \t"<<ip_address<<endl;
+		proxy_cached_server(serv_buff,ip_address);
+	}
+	if(strlen(ip_address)>1){
+		main_addr.sin_family = AF_INET;
+		main_addr.sin_addr.s_addr =inet_addr(ip_address);
+		main_addr.sin_port = htons(server_port); 
+		mfd=proxy_create_socket();
+		if(connect(mfd,(struct sockaddr *)&main_addr,sizeof(main_addr))<0){
+			cout<<"I am in \t"<<__FUNCTION__<<endl;
+			perror("connect:");
+			return;
+		}
 		else{
-			cout<<"sent the request to main server"<<endl;
-		}
-		cout<<"Receive the response from main server"<<endl;
-		bzero(buf,MAXLINE);
-		fd.open("main_server_resp",fstream::out);
-		n=recv(mfd,buf,MAXLINE,0);
-		if(n<0){
-			perror("recv");
-		}
-		cout<<"Received from main server\n"<<buf<<endl;
-		fd.write(buf,n);	
-		fd.close();
-	}		
+			cout<<"Connection is establised with\t"<<server_name<<endl;
+			temp=header_generation();
+			len=strlen(temp);
+			strncpy(header_server,temp,len);
+			header_server[len]='\0';
+			/*char *header_server = "GET /index.html HTTP/1.1\r\nHost: www.amazon.com\r\n\r\n";*/
+			cout<<"generated header to send to main server:\n"<<header_server<<endl;
+			if(n=sendto(mfd,header_server,strlen(header_server),0,(struct sockaddr *)&main_addr,sizeof(main_addr))<0)
+				perror("sendto");	
+			else{
+				cout<<"sent the request to main server"<<endl;
+			}
+			cout<<"Receive the response from main server"<<endl;
+			bzero(buf,MAXLINE);
+			fd.open("main_server_resp",fstream::out);
+			n=recv(mfd,buf,MAXLINE-1,0);
+			if(n<0){
+				perror("recv");
+			}
+			cout<<"Received from main server\n"<<buf<<endl;
+			fd.write(buf,n);	
+			fd.close();
+			//send the same response back to client
+			/*if(n=send(cfd,buf,n,0)<0)
+		                perror("sendto");
+		        else{
+		                cout<<"sent the response to client"<<endl;
+		        }*/
+			send_response_client();
+		}		
+	}
+	else{
+		cout<<"Sorry the IP is not obtained!!!"<<endl;
+		//send the server not found
+		bzero(header_err,MAXLINE);
+                strcpy(header_err,"HTTP/1.1 200 OK\r\nContent-Length:61\r\nContent-Type: text/html\r\nConnection: Keepalive\r\n\r\n");
+                cout<<"header to be sent to client is \n"<<header_err<<endl;
+                send(cfd,header_err,strlen(header_err),0);
+                bzero(buf,MAXLINE);
+                strcpy(buf,"<html>\r\n<p>IP not found, give valid hostname</p>\r\n</html>\r\n\r\n");
+                send(cfd,buf,strlen(buf),0);
+		return;
+	}
 }
 
 void get_process(){
@@ -133,15 +227,26 @@ void get_process(){
 
 void client_handle(){
 	int n;
-	char buf[MAXLINE];
-	string command,temp;
-	fstream fd,fd1;
+	char buf[MAXLINE],buf1[MAXLINE],header_err[MAX];
+	string command,temp,command1,temp1;
+	fstream fd,fd1,fd2;
 	fd.open("temp",fstream::out);
 	bzero(buf,MAXLINE);
 	n=recv(cfd,buf,MAXLINE,0);
 	cout<<"Received from client:"<<buf<<endl;
 	fd.write(buf,strlen(buf)-2);
 	fd.close();
+	//read hostname
+	fd2.open("temp",fstream::in);
+	bzero(buf1,MAXLINE);
+	fd2.getline(buf1,MAXLINE);
+	bzero(buf1,MAXLINE);
+        fd2.getline(buf1,MAXLINE);
+	fd2.close();
+	command1=buf1;
+	stringstream s1(command1);
+	while(s1>>temp1)
+		sv1.push_back(temp1);		
 	fd1.open("temp",fstream::in);
 	bzero(buf,MAXLINE);
 	fd1.getline(buf,MAXLINE);
@@ -151,17 +256,42 @@ void client_handle(){
 	while(s>>temp)
 		sv.push_back(temp);
 	if((strncmp(sv[0].c_str(),"GET",3)==0)||(strncmp(sv[0].c_str(),"CONNECT",7)==0)){
+	//if(strncmp(sv[0].c_str(),"GET",3)==0){
 		cout<<"This is GET command process for client"<<endl;
 		get_process();
 	}
 	else{
-		cout<<"Undefined function"<<endl;
+		//send the error of invalid method
+		cout<<"Undefined function and send error header"<<endl;
+		bzero(header_err,MAXLINE);
+        	strcpy(header_err,"HTTP/1.1 200 OK\r\nContent-Length:43\r\nContent-Type: text/html\r\nConnection: Keepalive\r\n\r\n");
+        	cout<<"header to be sent to client is \n"<<header_err<<endl;
+		send(cfd,header_err,strlen(header_err),0);
+                bzero(buf,MAXLINE);
+		strcpy(buf,"<html>\r\n<p>400 Bad Request</p>\r\n</html>\r\n\r\n");
+                send(cfd,buf,strlen(buf),0);
 	}	
 }
 
 int main(int argc,char **argv){
 	int childpid=0;
+	char dir[MAX];
+	fstream fd;
+
 	proxy_check_arg(argc,argv);
+
+	//Create directory to cache IP
+	bzero(dir,MAX);
+        getcwd(dir,MAX);
+        strncat(dir,"/proxy_dir",strlen("/proxy_dir"));
+        dir[strlen(dir)]='\0';
+        mkdir(dir,S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+        strncat(dir,"/hostname_ip_cache",strlen("/hostname_ip_cache"));
+        dir[strlen(dir)]='\0';
+        fd.open(dir,fstream::app);
+        fd.close();
+	//end
+
 	sfd=proxy_create_socket();
 	proxy_initialise_socket();
 	proxy_bind_socket();
