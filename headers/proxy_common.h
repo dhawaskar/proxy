@@ -21,8 +21,109 @@ using namespace std;
 extern int sfd,cfd,port;
 extern struct sockaddr_in servaddr,cliaddr;
 extern socklen_t client_len;
+extern char ip_address[MAX],cached_ip[MAX];
 
+void proxy_cached_server(char server[MAX],char ip_address[MAX]){
+        char dir[MAX];
+        fstream fd;
+        bzero(dir,MAX);
+        getcwd(dir,MAX);
+        strncat(dir,"/proxy_dir/hostname_ip_cache",strlen("/proxy_dir/hostname_ip_cache"));
+        dir[strlen(dir)]='\0';
+	cout<<"Filename is *************************************************** \t"<<dir<<endl;
+        fd.open(dir,fstream::app|fstream::binary);
+        if(fd.fail()){
+                cout<<"I am in "<<__FUNCTION__<<endl;
+                perror("open:");
+        }
+        else{
+                cout<<"Lets add the \t"<<server<<"and \t"<<ip_address<<"to the proxy cache"<<endl;
+                fd.write(server,strlen(server));
+                fd.write("\t",1);
+                fd.write(ip_address,strlen(ip_address));
+                fd.write("\r\n",2);
+                fd.close();
+        }
+}
 
+int  proxy_is_cache_server(char hostname[MAX]){
+	fstream fd;
+        char dir[MAX],buf[MAX];                                        
+        bzero(dir,MAX);                                                
+        getcwd(dir,MAX);                                               
+        strncat(dir,"/proxy_dir/hostname_ip_cache",strlen("/proxy_dir/hostname_ip_cache"));
+        dir[strlen(dir)]='\0';                                         
+	cout<<"Filename is *************************************************** \t"<<dir<<endl;
+        fd.open(dir,fstream::in|fstream::binary);                      
+        if(fd.fail()){
+                cout<<"I am in "<<__FUNCTION__<<endl;                  
+                perror("open:");
+		return 0;
+        }       
+        else{                                                          
+                while(fd.getline(buf,MAX)){                            
+                        if((strstr(buf,hostname)!=NULL)&&(strlen(buf)>1)){
+                                cout<<"Found the hostname"<<endl;
+                                strtok(buf,"\t");                      
+                                bzero(cached_ip,MAX);
+                                strcpy(cached_ip,strtok(NULL,"NULL")); 
+                                fd.close();
+                                return 1;
+                        }       
+                        bzero(buf,MAX);
+                }       
+                if(fd.eof()){
+                        cout<<"Hostname not found, add it to proxy cache"<<endl;
+                        return 0;
+                }
+        }
+
+}
+
+int proxy_hostname_to_ip(char hostname[MAX])
+{
+        struct hostent *he;
+        struct in_addr **addr_list;
+        int i,len;
+        strcpy(hostname,strtok(hostname,"/"));
+        len=strlen(hostname);
+        hostname[len]='\0';
+	cout<<"Find the IP address of \t"<<hostname<<endl;
+        if ( (he = gethostbyname( hostname ) ) == NULL){
+                // get the host info
+                perror("gethostbyname");
+                return 1;
+        }
+        addr_list = (struct in_addr **) he->h_addr_list;
+        bzero(ip_address,MAX);
+        for(i = 0; addr_list[i] != NULL; i++){
+                //Return the first one;
+                strcpy(ip_address , inet_ntoa(*addr_list[i]) );
+                return 0;
+        }
+        return 1;
+}
+
+int proxy_calculate_size(char filename[MAX]){
+	int len;
+	size_t file_size;
+	fstream fd;
+	len=strlen(filename);
+	filename[len]='\0';
+	cout<<"calculating the file size of\t:"<<filename<<endl;
+	fd.open(filename,fstream::in);
+	if(fd.fail()){
+		cout<<"I am in \t:"<<__FUNCTION__<<endl;
+		perror("open:");
+		return 0;
+	}
+	else{
+		fd.seekg(0,fstream::end);
+		file_size=fd.tellg();
+		fd.close();
+		return file_size;
+	}
+}
 
 void proxy_check_arg(int count,char **arg){
 
