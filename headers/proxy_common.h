@@ -23,6 +23,36 @@ extern struct sockaddr_in servaddr,cliaddr;
 extern socklen_t client_len;
 extern char ip_address[MAX],cached_ip[MAX];
 
+int proxy_non_block(char host[MAX]){
+	fstream fd;
+	char dir[MAX],buf[MAX];
+	int ip1,ip2;
+	getcwd(dir,MAX);
+	strncat(dir,"/block_ip_host",strlen("/block_ip_host"));
+	dir[strlen(dir)]='\0';
+	cout<<"Checking the file \t"<<dir<<"\tfor blocked IP and hosts for \t" <<host<<endl;
+	fd.open(dir,fstream::in|fstream::binary);
+	if(fd.fail()){
+		cout<<"I am in "<<__FUNCTION__<<endl;
+		perror("open");
+	}
+	else{
+		bzero(buf,MAX);
+		while(fd.getline(buf,MAX)){
+			cout<<"Checking the line \t"<<buf<<"with\t"<<host<<endl;
+			if(strncmp(buf,host,strlen(buf))==0){
+				cout<<"This is blocked host"<<endl;
+				return 0;
+			}
+			bzero(buf,MAX);
+		}
+		if(fd.eof()){
+			cout<<"This is not blocked"<<endl;
+			return 1;
+		}
+	}
+}
+
 void proxy_cached_server(char server[MAX],char ip_address[MAX]){
         char dir[MAX];
         fstream fd;

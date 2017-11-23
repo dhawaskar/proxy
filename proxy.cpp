@@ -130,70 +130,96 @@ void get_server_process(){
 	bzero(serv_buff,MAX);
 	strcpy(serv_buff,strstr(server_name,"www."));
 	serv_buff[strlen(serv_buff)]='\0';
-	if(proxy_is_cache_server(serv_buff)){
-		cout<<"Server entry is already cached"<<endl;
-		cout<<"Got the cached IP address"<<cached_ip<<endl;
-		strcpy(ip_address,cached_ip);
-	}
-	else{
-		cout<<"server entry is not cached yet and lets add it"<<endl;
-		proxy_hostname_to_ip(serv_buff);
-		cout<<"Got new IP address is \t"<<ip_address<<endl;
-		proxy_cached_server(serv_buff,ip_address);
-	}
-	if(strlen(ip_address)>1){
-		main_addr.sin_family = AF_INET;
-		main_addr.sin_addr.s_addr =inet_addr(ip_address);
-		main_addr.sin_port = htons(server_port); 
-		mfd=proxy_create_socket();
-		if(connect(mfd,(struct sockaddr *)&main_addr,sizeof(main_addr))<0){
-			cout<<"I am in \t"<<__FUNCTION__<<endl;
-			perror("connect:");
-			return;
+	if(proxy_non_block(serv_buff)){
+		if(proxy_is_cache_server(serv_buff)){
+			cout<<"Server entry is already cached"<<endl;
+			cout<<"Got the cached IP address"<<cached_ip<<endl;
+			strcpy(ip_address,cached_ip);
 		}
 		else{
-			cout<<"Connection is establised with\t"<<server_name<<endl;
-			temp=header_generation();
-			len=strlen(temp);
-			strncpy(header_server,temp,len);
-			header_server[len]='\0';
-			/*char *header_server = "GET /index.html HTTP/1.1\r\nHost: www.amazon.com\r\n\r\n";*/
-			cout<<"generated header to send to main server:\n"<<header_server<<endl;
-			if(n=sendto(mfd,header_server,strlen(header_server),0,(struct sockaddr *)&main_addr,sizeof(main_addr))<0)
-				perror("sendto");	
+			cout<<"server entry is not cached yet and lets add it"<<endl;
+			proxy_hostname_to_ip(serv_buff);
+			cout<<"Got new IP address is \t"<<ip_address<<endl;
+			proxy_cached_server(serv_buff,ip_address);
+		}
+		if(strlen(ip_address)>1){
+			if(proxy_non_block(ip_address)){
+				main_addr.sin_family = AF_INET;
+				main_addr.sin_addr.s_addr =inet_addr(ip_address);
+				main_addr.sin_port = htons(server_port); 
+				mfd=proxy_create_socket();
+				if(connect(mfd,(struct sockaddr *)&main_addr,sizeof(main_addr))<0){
+					cout<<"I am in \t"<<__FUNCTION__<<endl;
+					perror("connect:");
+					return;
+				}
+				else{
+					cout<<"Connection is establised with\t"<<server_name<<endl;
+					temp=header_generation();
+					len=strlen(temp);
+					strncpy(header_server,temp,len);
+					header_server[len]='\0';
+					/*char *header_server = "GET /index.html HTTP/1.1\r\nHost: www.amazon.com\r\n\r\n";*/
+					cout<<"generated header to send to main server:\n"<<header_server<<endl;
+					if(n=sendto(mfd,header_server,strlen(header_server),0,(struct sockaddr *)&main_addr,sizeof(main_addr))<0)
+						perror("sendto");	
+					else{
+						cout<<"sent the request to main server"<<endl;
+					}
+					cout<<"Receive the response from main server"<<endl;
+					bzero(buf,MAXLINE);
+					fd.open("main_server_resp",fstream::out);
+					n=recv(mfd,buf,MAXLINE-1,0);
+					if(n<0){
+						perror("recv");
+					}
+					cout<<"Received from main server\n"<<buf<<endl;
+					fd.write(buf,n);	
+					fd.close();
+					//send the same response back to client
+					/*if(n=send(cfd,buf,n,0)<0)
+						perror("sendto");
+					else{
+						cout<<"sent the response to client"<<endl;
+					}*/
+					send_response_client();
+				}
+			}
 			else{
-				cout<<"sent the request to main server"<<endl;
-			}
-			cout<<"Receive the response from main server"<<endl;
-			bzero(buf,MAXLINE);
-			fd.open("main_server_resp",fstream::out);
-			n=recv(mfd,buf,MAXLINE-1,0);
-			if(n<0){
-				perror("recv");
-			}
-			cout<<"Received from main server\n"<<buf<<endl;
-			fd.write(buf,n);	
-			fd.close();
-			//send the same response back to client
-			/*if(n=send(cfd,buf,n,0)<0)
-		                perror("sendto");
-		        else{
-		                cout<<"sent the response to client"<<endl;
-		        }*/
-			send_response_client();
-		}		
+				//add code here for error blocked IP
+				bzero(header_err,MAXLINE);
+                        	strcpy(header_err,"HTTP/1.1 200 OK\r\nContent-Length:46\r\nContent-Type: text/html\r\nConnection: Keepalive\r\n\r\n");
+                        	cout<<"header to be sent to client is \n"<<header_err<<endl;
+                        	send(cfd,header_err,strlen(header_err),0);
+                        	bzero(buf,MAXLINE);
+                        	strcpy(buf,"<html>\r\n<p>ERROR 403 Forbidden</p>\r\n</html>\r\n\r\n");
+                        	send(cfd,buf,strlen(buf),0);
+				return ;
+			}		
+		}
+		else{
+			cout<<"Sorry the IP is not obtained!!!"<<endl;
+			//send the server not found
+			bzero(header_err,MAXLINE);
+		        strcpy(header_err,"HTTP/1.1 200 OK\r\nContent-Length:61\r\nContent-Type: text/html\r\nConnection: Keepalive\r\n\r\n");
+		        cout<<"header to be sent to client is \n"<<header_err<<endl;
+		        send(cfd,header_err,strlen(header_err),0);
+		        bzero(buf,MAXLINE);
+		        strcpy(buf,"<html>\r\n<p>IP not found, give valid hostname</p>\r\n</html>\r\n\r\n");
+		        send(cfd,buf,strlen(buf),0);
+			return;
+		}	
 	}
 	else{
-		cout<<"Sorry the IP is not obtained!!!"<<endl;
-		//send the server not found
+		//add code here for error: blocked host
 		bzero(header_err,MAXLINE);
-                strcpy(header_err,"HTTP/1.1 200 OK\r\nContent-Length:61\r\nContent-Type: text/html\r\nConnection: Keepalive\r\n\r\n");
+                strcpy(header_err,"HTTP/1.1 200 OK\r\nContent-Length:43\r\nContent-Type: text/html\r\nConnection: Keepalive\r\n\r\n");
                 cout<<"header to be sent to client is \n"<<header_err<<endl;
                 send(cfd,header_err,strlen(header_err),0);
                 bzero(buf,MAXLINE);
-                strcpy(buf,"<html>\r\n<p>IP not found, give valid hostname</p>\r\n</html>\r\n\r\n");
+                strcpy(buf,"<html>\r\n<p>ERROR 403 Forbidden\r\n</html>\r\n\r\n");
                 send(cfd,buf,strlen(buf),0);
-		return;
+                return ;
 	}
 }
 
