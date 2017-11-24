@@ -19,13 +19,16 @@ char * header_generation(){
 	char server[MAX];
 	bzero(server,MAX);
         strncpy(server,server_name,strlen(server_name));
-        strtok(server,"/");
-        strcpy(server,strtok(NULL,"/"));
+        //strtok(server,"/");
+        //strcpy(server,strtok(NULL,"/"));
         cout<<"The server name should be ****************\t"<<server<<endl;
 	bzero(header,MAXLINE);
 	strncpy(header,"GET ",strlen("GET "));
+	//strncat(header,"http://",strlen("http://"));
 	//strncat(header,server_name,strlen(server_name));
 	strncat(header,"/index.html",strlen("/index.html"));
+//	strncat(header,"/godlytalias/My-Codes/blob/master/B%2Btree.c",strlen("/godlytalias/My-Codes/blob/master/B%2Btree.c"));
+	//strncat(header,"/exec/obidos/subst/home/home.html",strlen("/exec/obidos/subst/home/home.html"));
 	//strncat(header,"/",1);
 	strncat(header," ",1);
 	strncat(header,sv[2].c_str(),strlen(sv[2].c_str()));
@@ -33,6 +36,7 @@ char * header_generation(){
 	strncat(header,"Host: ",strlen("Host: "));
 	//strncat(header,sv1[1].c_str(),strlen(sv1[1].c_str()));
 	strncat(header,server,strlen(server));
+	//strncat(header,"localhost",strlen("localhost"));
 	strncat(header,"\r\n",2);
 	strncat(header,"Connection: Close",strlen("Connection: Close"));
 	strncat(header,"\r\n\r\n",4);
@@ -46,29 +50,28 @@ char * header_generation(){
 
 void send_response_client(){
 	//create the response file from server
-        char buf[MAXLINE],file_type[MAX],header[MAXLINE],file_size_str[MAX],filename[MAX];
-	int n,file_size,m,len;
-        bzero(file_type,MAX);
-	bzero(filename,MAX);
-	strcpy(filename,"response.html");
-	filename[strlen(filename)]='\0';
+	char buf[MAXLINE],file_type[MAX],header[MAXLINE],file_size_str[MAX],filename[MAX];
+        int n,file_size,m,len;
+        bzero(filename,MAX);
+        strcpy(filename,"response.html");
+        filename[strlen(filename)]='\0';
         fstream fd,fd1,fd2;
         fd.open("main_server_resp",fstream::in|fstream::binary);
         fd1.open(filename,fstream::out|fstream::binary);
         if(fd.fail())   perror("open");
         bzero(buf,MAXLINE);
         while(fd.getline(buf,MAXLINE)){
-                /*if(strstr(buf,"Content-Type:")){
-                        strtok(buf," ");
-                        strcpy(file_type,strtok(NULL,"NULL"));
-                        cout<<"File type is \t"<<file_type<<endl;
-                }*/
-                if(strlen(buf)==1){
-                        while(fd.getline(buf,MAXLINE)){
-                                fd1.write(buf,strlen(buf)-1);
-				fd1.write("\r\n",2);
+                if(strlen(buf)<=1){
+                        cout<<"The empty line is reached"<<endl;
+                        bzero(buf,MAXLINE);
+                        while(fd.read(buf,1)){
+                                //cout<<buf<<endl;
+                                fd1.write(buf,1);
+                                //fd1.write("\r\n",2);
+                                bzero(buf,MAXLINE);
                         }
                         fd1.close();
+                        fd.close();
                         break;
                 }
                 bzero(buf,MAXLINE);
@@ -112,7 +115,7 @@ void send_response_client(){
                         perror("open:");
                 }
                 else{
-                        bzero(buf,MAX);
+                        bzero(buf,MAXLINE);
                         while(fd2.read(buf,190)){
                                 send(cfd,buf,190,0);
                                 bzero(buf,MAXLINE);
@@ -123,12 +126,13 @@ void send_response_client(){
 
 
 void get_server_process(){
-	char *temp,buf[MAXLINE],header_err[MAXLINE],serv_buff[MAX];
+	char *temp,buf[MAXLINE],header_err[MAXLINE],serv_buff[MAX],file[VERYLARGEMAX];
 	int len,n;
 	fstream fd;
 	cout<<"Lets talk to main server:\t"<<server_name<<"\tat port:\t"<<server_port<<endl;
 	bzero(serv_buff,MAX);
-	strcpy(serv_buff,strstr(server_name,"www."));
+	//strcpy(serv_buff,strstr(server_name,"www."));
+	strcpy(serv_buff,server_name);
 	serv_buff[strlen(serv_buff)]='\0';
 	if(proxy_non_block(serv_buff)){
 		if(proxy_is_cache_server(serv_buff)){
@@ -146,11 +150,20 @@ void get_server_process(){
 			if(proxy_non_block(ip_address)){
 				main_addr.sin_family = AF_INET;
 				main_addr.sin_addr.s_addr =inet_addr(ip_address);
+				//main_addr.sin_addr.s_addr =inet_addr("127.0.0.1");
 				main_addr.sin_port = htons(server_port); 
+				//main_addr.sin_port = htons(8001); 
 				mfd=proxy_create_socket();
 				if(connect(mfd,(struct sockaddr *)&main_addr,sizeof(main_addr))<0){
 					cout<<"I am in \t"<<__FUNCTION__<<endl;
 					perror("connect:");
+					bzero(header_err,MAXLINE);
+                                	strcpy(header_err,"HTTP/1.1 200 OK\r\nContent-Length:46\r\nContent-Type: text/html\r\nConnection: Keepalive\r\n\r\n");
+                                	cout<<"header to be sent to client is \n"<<header_err<<endl;
+                                	send(cfd,header_err,strlen(header_err),0);
+                                	bzero(buf,MAXLINE);
+                                	strcpy(buf,"<html>\r\n<p>ERROR CONNECTION FAILED</p>\r\n</html>\r\n\r\n");
+                                	send(cfd,buf,strlen(buf),0);
 					return;
 				}
 				else{
@@ -169,19 +182,15 @@ void get_server_process(){
 					cout<<"Receive the response from main server"<<endl;
 					bzero(buf,MAXLINE);
 					fd.open("main_server_resp",fstream::out);
-					n=recv(mfd,buf,MAXLINE-1,0);
+					//content
+					bzero(file,VERYLARGEMAX);	
+					n=recv(mfd,buf,VERYLARGEMAX,0);
 					if(n<0){
 						perror("recv");
 					}
 					cout<<"Received from main server\n"<<buf<<endl;
 					fd.write(buf,n);	
 					fd.close();
-					//send the same response back to client
-					/*if(n=send(cfd,buf,n,0)<0)
-						perror("sendto");
-					else{
-						cout<<"sent the response to client"<<endl;
-					}*/
 					send_response_client();
 				}
 			}
@@ -225,25 +234,37 @@ void get_server_process(){
 
 void get_process(){
 	int len;
-	char server_sock[MAX],temp_port[MAX];
+	vector <string> com;
+	string segment;
+	char server_sock[MAX],temp_port[MAX],temp[MAX];
 	len=strlen(sv[1].c_str());
 	bzero(server_sock,MAX);
 	bzero(server_name,MAX);
+	bzero(temp,MAX);
 	bzero(temp_port,MAX);
 	strncpy(server_sock,sv[1].c_str(),len);
 	server_sock[len]='\0';
+	stringstream s(server_sock);
+	while(getline(s,segment,':')){
+		com.push_back(segment);
+	} 
+	strcpy(temp,com[1].c_str());
+	strncpy(server_name,temp+2,strlen(temp)-2);
 	cout<<"The client wants connection with :"<<server_sock<<endl;
-	if(strstr(server_sock,"http")==NULL){
+	if(com.size()>=3){
 		cout<<"Port is given"<<endl;
-		strncpy(server_name,"http://",strlen("http://"));
-		strcat(server_name,strtok(server_sock,":"));
-		strcat(server_name,"/");
+		//strncpy(server_name,"http://",strlen("http://"));
+		//strcat(server_name,strtok(server_sock,":"));
+		//strcat(server_name,"/");
+		
+		cout<<"server name *****************"<<server_name<<endl;
 		//strcpy(temp_port,strtok(NULL,"NULL"));
-		strcpy(temp_port,"80");
+		//strcpy(temp_port,"80");
+		strcpy(temp_port,com[2].c_str());
 	}
 	else{
 		cout<<"port is not given"<<endl;
-		strcpy(server_name,sv[1].c_str());
+		//strcpy(server_name,sv[1].c_str());
                 strcpy(temp_port,"80");
 	}
 	server_port=atoi(temp_port);
