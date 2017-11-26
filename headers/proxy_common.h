@@ -16,7 +16,7 @@
 #define MAXLINE 1024
 #define MAXCLIENTS 1024
 #define MAX 100
-#define VERYLARGEMAX 100000
+#define VERYLARGEMAX 1000000
 using namespace std;
 extern int sfd,cfd,port;
 extern struct sockaddr_in servaddr,cliaddr;
