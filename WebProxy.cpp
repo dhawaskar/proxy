@@ -6,13 +6,13 @@
 
 using namespace std;
 
-int sfd,cfd,mfd=0,port,server_port=0;
+int sfd,cfd,mfd=0,port,server_port=0,serv_flag=1,timer=0;
 struct sockaddr_in servaddr,cliaddr,main_addr;
 socklen_t client_len=sizeof(cliaddr);
 vector <string> sv;
 vector <string> sv1; 
-char header[MAXLINE],server_name[MAX],header_server[MAXLINE],header_client[MAXLINE],ip_address[MAX],cached_ip[MAX],file_path[MAX],content_type[MAX],content_len[MAX],file_type[MAX],send_file_type[MAX];
-
+char header[MAXLINE],server_name[MAX],header_server[MAXLINE],header_client[MAXLINE],ip_address[MAX],cached_ip[MAX],file_path[MAX],content_type[MAX],content_len[MAX],file_type[MAX],send_file_type[MAX],file_search[MAX],time_search[MAX];
+time_t t1,t2,t3;
 char * header_generation(){
 	cout<<"Header generation"<<endl;
 	int len;
@@ -40,11 +40,24 @@ char * header_generation(){
 
 
 void store_file(char filename[MAX],char resp_filename[MAX],char process[MAX]){
+	fstream cached_fd;
+	char write_buf[MAX];
 	if(strstr(resp_filename,process)){
 	fstream fd,fd1;
 	char buf[MAXLINE],temp[MAX];
 	bzero(buf,MAXLINE);
 	fd1.open(filename,fstream::out|fstream::binary);
+	t3=time(NULL);
+	cached_fd.open("cache_time",fstream::app|fstream::binary);
+	bzero(write_buf,MAX);
+	strcpy(write_buf,filename);
+	cached_fd.write(write_buf,strlen(write_buf));
+	cached_fd.write("\t",1);
+	bzero(write_buf,MAX);
+	sprintf(write_buf,"%ld",t3);
+	cached_fd.write(write_buf,strlen(write_buf));
+	cached_fd.write("\r\n",2);
+	cached_fd.close();
 	fd.open(resp_filename,fstream::in|fstream::binary);
 	while(fd.getline(buf,MAXLINE)){
 		if(strncmp(buf,"Content-Type:",strlen("Content-Type:"))==0){
@@ -85,9 +98,9 @@ void store_file(char filename[MAX],char resp_filename[MAX],char process[MAX]){
 }
 
 void get_server_process(){
-	char *temp,buf[MAXLINE],header_err[MAXLINE],serv_buff[MAX],file[MAX],filename[MAX],file_size_str[MAX],header[MAX],resp_filename[MAX],md5sum_str[MAX];
+	char *temp,buf[MAXLINE],header_err[MAXLINE],serv_buff[MAX],file[MAX],filename[MAX],file_size_str[MAX],header[MAX],resp_filename[MAX],md5sum_str[MAX],read_buf[MAXLINE];
 	int len,n,childpid,md5sum=0,file_size=0;
-	fstream fd,fd1,fd2,fd3;
+	fstream fd,fd1,fd2,fd3,cached_fd;
 	cout<<"Lets talk to main server:\t"<<server_name<<"\tat port:\t"<<server_port<<endl;
 	bzero(serv_buff,MAX);
 	strcpy(serv_buff,server_name);
@@ -137,6 +150,32 @@ void get_server_process(){
 				fstream file(filename); 
 				if(file.good()&&file_size>0){
 					cout<<"File is cached"<<endl;
+					cached_fd.open("cache_time",fstream::in|fstream::binary);
+					bzero(read_buf,MAXLINE);
+					while(cached_fd.getline(read_buf,MAXLINE)){	
+						strcpy(file_search,strtok(read_buf,"\t"));
+						strcpy(time_search,strtok(NULL,"NULL"));
+						if(strncmp(filename,file_search,strlen(filename))==0){
+							cout<<"Got the file"<<endl;
+							t2=atoi(time_search);
+							cout<<"creation time is:\t"<<t2<<endl;
+							cout<<"Timer set value is\t"<<timer<<endl;
+							if(t1-t2>timer){
+								cout<<"*****************difference is***************************: \t"<<(t1-t2)<<endl;
+								cout<<"Even files are saved the timer has expired"<<endl;
+								serv_flag=0;
+								goto server_file_online;
+							}
+							else{
+								cout<<"*****************difference is***************************: \t"<<(t1-t2)<<endl;
+								cout<<"Since the files are not old, we can use them from cache"<<endl;
+								cached_fd.close();
+								break;
+							}
+						}
+						bzero(read_buf,MAXLINE);
+					}
+					if(cached_fd.eof())	cached_fd.close();
 					bzero(file_size_str,MAX);
 					sprintf(file_size_str,"%d",file_size);
 					cout<<"The file size is\t"<<file_size_str<<endl;
@@ -159,6 +198,8 @@ void get_server_process(){
                                         close(mfd);
 				}
 				else{
+					server_file_online:
+					cached_fd.close();
 					main_addr.sin_family = AF_INET;
 					main_addr.sin_addr.s_addr =inet_addr(ip_address);
 					main_addr.sin_port = htons(server_port);
@@ -220,7 +261,13 @@ void get_server_process(){
 							bzero(buf_file,MAXLINE);
 						}
 						cout<<"Total bytes red\t"<<bytes_red<<endl;
-						store_file(filename,resp_filename,resp_temp);
+						if(serv_flag){
+							cout<<"***************saving the new files*******************"<<endl;
+							store_file(filename,resp_filename,resp_temp);
+						}
+						else{
+							cout<<"*****************************Not saving file as files are sevred online because timer has expired***************************************************************************"<<endl;
+						}
 						close(mfd);
 					}
 				}
@@ -345,6 +392,7 @@ void client_handle(){
 	fd.open("temp",fstream::out);
 	bzero(buf,MAXLINE);
 	n=recv(cfd,buf,MAXLINE,0);
+	t1=time(NULL);
 	cout<<"Received from client:"<<buf<<endl;
 	fd.write(buf,strlen(buf)-2);
 	fd.close();
@@ -396,6 +444,9 @@ int main(int argc,char **argv){
 
 	proxy_check_arg(argc,argv);
 
+	//timer value
+	timer=atoi(argv[2]);
+	cout<<"you have set the timer value of:\t"<<timer<<endl;
 	//Create directory to cache IP
 	bzero(dir,MAX);
         getcwd(dir,MAX);

@@ -1,4 +1,5 @@
 #include <iostream>
+#include <time.h>
 #include <openssl/md5.h>
 #include <string.h>
 #include <vector>
@@ -232,8 +233,8 @@ int proxy_calculate_size(char filename[MAX]){
 
 void proxy_check_arg(int count,char **arg){
 
-	if(count<2){
-		cout<<"Usage :"<<arg[0]<<" <port_num>"<<endl;
+	if(count<3){
+		cout<<"Usage :"<<arg[0]<<" <port_num> <timer_value>"<<endl;
 		exit(0);
 	}
 	else{
