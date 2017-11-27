@@ -2,8 +2,8 @@ CC=g++
 RM=rm -f
 
 default: all
-all: proxy 
-proxy: proxy.cpp
-	$(CC) -o proxy proxy.cpp -lcrypto
+all: WebProxy 
+WebProxy: WebProxy.cpp
+	$(CC) -o WebProxy WebProxy.cpp -lcrypto
 clean:
-	$(RM) proxy client
+	$(RM) WebProxy client

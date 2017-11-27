@@ -11,7 +11,7 @@ struct sockaddr_in servaddr,cliaddr,main_addr;
 socklen_t client_len=sizeof(cliaddr);
 vector <string> sv;
 vector <string> sv1; 
-char header[MAXLINE],server_name[MAX],header_server[MAXLINE],header_client[MAXLINE],ip_address[MAX],cached_ip[MAX],file_path[MAX],content_type[MAX],content_len[MAX];
+char header[MAXLINE],server_name[MAX],header_server[MAXLINE],header_client[MAXLINE],ip_address[MAX],cached_ip[MAX],file_path[MAX],content_type[MAX],content_len[MAX],file_type[MAX],send_file_type[MAX];
 
 char * header_generation(){
 	cout<<"Header generation"<<endl;
@@ -39,10 +39,55 @@ char * header_generation(){
 }
 
 
+void store_file(char filename[MAX],char resp_filename[MAX],char process[MAX]){
+	if(strstr(resp_filename,process)){
+	fstream fd,fd1;
+	char buf[MAXLINE],temp[MAX];
+	bzero(buf,MAXLINE);
+	fd1.open(filename,fstream::out|fstream::binary);
+	fd.open(resp_filename,fstream::in|fstream::binary);
+	while(fd.getline(buf,MAXLINE)){
+		if(strncmp(buf,"Content-Type:",strlen("Content-Type:"))==0){
+			bzero(content_type,MAX);
+			strtok(buf,":");
+			bzero(temp,MAX);
+			strcpy(temp,strtok(NULL,"NULL"));
+			strncpy(content_type,temp,strlen(temp)-1);
+			cout<<"content type to be sent:"<<content_type<<endl;
+		}
+		if(strncmp(buf,"Content-Length:",strlen("Content-Length:"))==0){
+                        bzero(content_len,MAX);
+                        strtok(buf,":");
+                        bzero(temp,MAX);
+                        strcpy(temp,strtok(NULL,"NULL"));
+                        strncpy(content_len,temp,strlen(temp)-1);
+                        cout<<"content len to be sent"<<content_len<<endl;
+                }
+                if(strlen(buf)<=1){
+                        cout<<"The empty line is reached"<<endl;
+                        bzero(buf,MAXLINE);
+                        while(fd.read(buf,1)){
+                                fd1.write(buf,1);
+                                bzero(buf,MAXLINE);
+				//byte_count++;
+                        }
+                        fd1.close();
+                        fd.close();
+                        break;
+                }
+                bzero(buf,MAXLINE);
+        }
+	cout<<"The contents been copied to \t"<<filename<<endl;
+	}
+	else{
+		cout<<"Other process trying to write\n\n"<<endl;
+	}
+}
+
 void get_server_process(){
-	char *temp,buf[MAXLINE],header_err[MAXLINE],serv_buff[MAX],file[MAX],filename[MAX];
-	int len,n,childpid;
-	fstream fd;
+	char *temp,buf[MAXLINE],header_err[MAXLINE],serv_buff[MAX],file[MAX],filename[MAX],file_size_str[MAX],header[MAX],resp_filename[MAX],md5sum_str[MAX];
+	int len,n,childpid,md5sum=0,file_size=0;
+	fstream fd,fd1,fd2,fd3;
 	cout<<"Lets talk to main server:\t"<<server_name<<"\tat port:\t"<<server_port<<endl;
 	bzero(serv_buff,MAX);
 	strcpy(serv_buff,server_name);
@@ -61,40 +106,126 @@ void get_server_process(){
 		}
 		if(strlen(ip_address)>1){
 			if(proxy_non_block(ip_address)){
-				main_addr.sin_family = AF_INET;
-				main_addr.sin_addr.s_addr =inet_addr(ip_address);
-				main_addr.sin_port = htons(server_port);
-				mfd=proxy_create_socket();
-				cout<<"The socket created to talk to main server"<<mfd<<endl;
-				if(connect(mfd,(struct sockaddr *)&main_addr,sizeof(main_addr))<0){
-					cout<<"I am in \t"<<__FUNCTION__<<endl;
-					perror("connect:");
+				if(strlen(file_path)<=1){
+					bzero(file_path,MAX);
+					strcpy(file_path,"/index.html");
+				}
+				char md5sum_temp[MAX];
+				cout<<"The file path is :\t*************"<<file_path<<endl;
+				file_type_predict(file_path);
+        			cout<<"File type is\t"<<file_type<<endl;
+				send_file_type_predict(file_type);
+				cout<<"send file type is \t"<<send_file_type<<endl;
+				bzero(md5sum_str,MAX);
+				strcpy(md5sum_str,server_name);
+				strcat(md5sum_str,file_path);
+				md5sum_str[strlen(md5sum_str)]='\0';
+				md5sum=compute_md5sum(md5sum_str,strlen(md5sum_str));
+				cout<<"The md5sum is *************************"<<md5sum<<endl;
+				bzero(filename,MAX);
+				getcwd(filename,MAX);
+				strcat(filename,"/proxy_cache_files/");
+				mkdir(filename,S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+				bzero(md5sum_temp,MAX);
+				sprintf(md5sum_temp,"%d",md5sum);
+				strcat(filename,md5sum_temp);	
+				//sprintf(filename,"%d",md5sum);
+				filename[strlen(filename)]='\0';
+				cout<<"File name is ******\t"<<filename<<endl;
+				file_size=proxy_calculate_size(filename);
+				cout<<"file_size in integer\t"<<file_size<<endl;
+				fstream file(filename); 
+				if(file.good()&&file_size>0){
+					cout<<"File is cached"<<endl;
+					bzero(file_size_str,MAX);
+					sprintf(file_size_str,"%d",file_size);
+					cout<<"The file size is\t"<<file_size_str<<endl;
+					bzero(header,MAX);
+					strcpy(header,"HTTP/1.1 200 OK\r\nContent-Length:");			
+					strcat(header,file_size_str);	
+					strcat(header,"\r\nContent-Type: ");
+					strcat(header,send_file_type);
+					strcat(header,"\r\nConnection: Keepalive\r\n\r\n");
+					cout<<"Header to be sent\n"<<header<<endl;
+					//send the header
+					send(cfd,header,strlen(header),0);
+                                        fd1.open(filename,fstream::in|fstream::binary);
+                                        while(!fd.eof()){
+                                              bzero(buf,MAXLINE);
+                                              fd1.read(buf,1);
+                                              send(cfd,buf,1,0);
+					}
+					fd1.close();
+                                        close(mfd);
 				}
 				else{
-					cout<<"Connection is establised with\t"<<server_name<<endl;
-					strcpy(header_server,header_generation());
-					header_server[strlen(header_server)]='\0';
-					cout<<"generated header to send to main server:\n"<<header_server<<endl;
-					if(n=send(mfd,header_server,strlen(header_server),0)<0)
-						perror("sendto");	
+					main_addr.sin_family = AF_INET;
+					main_addr.sin_addr.s_addr =inet_addr(ip_address);
+					main_addr.sin_port = htons(server_port);
+					mfd=proxy_create_socket();
+					cout<<"The socket created to talk to main server"<<mfd<<endl;
+					if(connect(mfd,(struct sockaddr *)&main_addr,sizeof(main_addr))<0){
+						cout<<"I am in \t"<<__FUNCTION__<<endl;
+						perror("connect:");
+					}
 					else{
-						cout<<"sent the request to main server"<<endl;
-					}
-					cout<<"Receive the response from main server"<<endl;
-					bzero(buf,MAX);
-					n=recv(mfd,buf,MAXLINE,0);
-					send(cfd,buf,n,0);
-					int flag=VERYLARGEMAX;
-					while(flag--){
-						bzero(buf,MAX);
-						n=recv(mfd,buf,1,0);
+						cout<<"Connection is establised with\t"<<server_name<<endl;
+						strcpy(header_server,header_generation());
+						header_server[strlen(header_server)]='\0';
+						cout<<"generated header to send to main server:\n"<<header_server<<endl;
+						if(n=send(mfd,header_server,strlen(header_server),0)<0)
+							perror("sendto");	
+						else{
+							cout<<"sent the request to main server"<<endl;
+						}
+						cout<<"Receive the response from main server"<<endl;
+						//fd.open(filename,fstream::out|fstream::binary);	
+						bzero(resp_filename,MAX);
+						getcwd(resp_filename,MAX);
+						strcat(resp_filename,"/loggin/");
+						mkdir(resp_filename,S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);	
+						strcat(resp_filename,"temp_response");
+						char resp_temp[MAX];
+						bzero(resp_temp,MAX);
+						sprintf(resp_temp,"%d",getpid());
+						strcat(resp_filename,resp_temp);
+						resp_filename[strlen(resp_filename)]='\0';
+						fd2.open(resp_filename,fstream::out|fstream::binary);
+						bzero(buf,MAXLINE);
+						n=recv(mfd,buf,MAXLINE,0);
+						fd2.write(buf,n);
 						send(cfd,buf,n,0);
+						int flag=VERYLARGEMAX,bytes_red=0;
+						while(flag--){
+							bzero(buf,MAXLINE);
+							n=recv(mfd,buf,1,0);
+							//cout<<"Red these bytes\t"<<n<<"\t"<<buf<<endl;
+							if(n==0){
+								fd2.close();
+								break;
+							}
+							else{
+								send(cfd,buf,n,0);
+								//cout<<buf<<endl;
+								fd2.write(buf,n);
+							}
+							bytes_red++;
+						}
+						cout<<"*******Received from main server***********"<<endl;
+						char buf_file[MAXLINE];
+						fd3.open("temp_response",fstream::in|fstream::binary);
+						bzero(buf_file,MAXLINE);
+						while(fd3.getline(buf_file,MAXLINE)){
+							cout<<buf_file<<endl;
+							bzero(buf_file,MAXLINE);
+						}
+						cout<<"Total bytes red\t"<<bytes_red<<endl;
+						store_file(filename,resp_filename,resp_temp);
+						close(mfd);
 					}
-					close(mfd);
 				}
 			}
 			else{
-				//add code here for error blocked IP
 				bzero(header_err,MAXLINE);
                         	strcpy(header_err,"HTTP/1.1 200 OK\r\nContent-Length:46\r\nContent-Type: text/html\r\nConnection: Keepalive\r\n\r\n");
                         	cout<<"header to be sent to client is \n"<<header_err<<endl;
@@ -129,6 +260,29 @@ void get_server_process(){
                 send(cfd,buf,strlen(buf),0);
                 return ;
 	}
+}
+
+void connect_process(){
+	int len;
+        vector <string> com;
+        string segment;
+        char server_sock[MAX],temp[MAX];
+        len=strlen(sv[1].c_str());
+        bzero(server_sock,MAX);
+        bzero(server_name,MAX);
+        bzero(temp,MAX);
+        bzero(file_path,MAX);
+        strncpy(server_sock,sv[1].c_str(),len);
+        server_sock[len]='\0';
+        stringstream s(server_sock);
+        while(getline(s,segment,':')){
+                com.push_back(segment);
+        }
+        strcpy(server_name,com[0].c_str());
+	strcpy(temp,com[1].c_str());	
+        server_port=atoi(temp);
+        cout<<"Server name is\t"<<server_name<<"\tport is \t"<<server_port<<endl;
+        get_server_process();
 }
 
 void get_process(){
@@ -213,10 +367,14 @@ void client_handle(){
 	stringstream s(command);
 	while(s>>temp)
 		sv.push_back(temp);
-	if((strncmp(sv[0].c_str(),"GET",3)==0)||(strncmp(sv[0].c_str(),"CONNECT",7)==0)){
-	//if(strncmp(sv[0].c_str(),"GET",3)==0){
+	//if((strncmp(sv[0].c_str(),"GET",3)==0)||(strncmp(sv[0].c_str(),"CONNECT",7)==0)){
+	if(strncmp(sv[0].c_str(),"GET",3)==0){
 		cout<<"This is GET command process for client"<<endl;
 		get_process();
+	}
+	else if(strncmp(sv[0].c_str(),"CONNECT",7)==0){
+		cout<<"This is connect request"<<endl;
+		connect_process();
 	}
 	else{
 		//send the error of invalid method

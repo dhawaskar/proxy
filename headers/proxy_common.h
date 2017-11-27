@@ -1,4 +1,5 @@
 #include <iostream>
+#include <openssl/md5.h>
 #include <string.h>
 #include <vector>
 #include <sstream>
@@ -22,6 +23,80 @@ extern int sfd,cfd,port;
 extern struct sockaddr_in servaddr,cliaddr;
 extern socklen_t client_len;
 extern char ip_address[MAX],cached_ip[MAX];
+extern char file_type[MAX];
+extern char send_file_type[MAX];
+
+
+void  send_file_type_predict(char str1[MAX]){
+        bzero(send_file_type,MAX);
+	if(strlen(str1)==0){
+		strcpy(send_file_type," ");
+	}
+        else if(strcmp(str1,".html")==0){
+                strcpy(send_file_type,"text/html");
+        }
+        else if(strcmp(str1,".htm")==0){
+                strcpy(send_file_type,"text/html");
+        }
+        else if(strcmp(str1,".txt")==0){
+                strcpy(send_file_type,"text/plain");
+        }
+        else if(strcmp(str1,".png")==0){
+                strcpy(send_file_type,"image/png");
+        }
+        else if(strcmp(str1,".gif")==0){
+                strcpy(send_file_type,"image/gif");
+        }
+        else if(strcmp(str1,".jpg")==0){
+                strcpy(send_file_type,"image/jpg");
+        }
+        else if(strcmp(str1,".css")==0){
+                strcpy(send_file_type,"text/css");
+        }
+        else if(strcmp(str1,".js")==0){
+                strcpy(send_file_type,"text/javascript");
+        }
+        else if(strcmp(str1,".ico")==0){
+                strcpy(send_file_type,"image/x-icon");
+        }
+	else{
+		strcpy(send_file_type," ");
+	}
+}
+
+void file_type_predict(char buf[MAX]){
+	cout<<"Predicting the file path for \t"<<buf<<endl;
+	bzero(file_type,MAX);
+        vector <string> fv;
+        string segment;
+        stringstream s(buf);
+        while(getline(s,segment,'/')){
+                fv.push_back(segment);
+        }
+        //cout<<fv[fv.size()-1].c_str()<<endl;
+	if(strstr(fv[fv.size()-1].c_str(),"."))
+        	strcpy(file_type,strstr(fv[fv.size()-1].c_str(),"."));
+	else
+		strcpy(file_type,"");
+}
+
+
+int compute_md5sum(char *buffer,int file_size){
+        unsigned char digest[MD5_DIGEST_LENGTH];
+        MD5((unsigned char*)buffer, file_size, (unsigned char*)&digest);
+        char mdString[32];
+        for(int i = 0; i < 16; i++)
+                sprintf(&mdString[i*2], "%02x", (unsigned int)digest[i]);
+        //cout<<"MD5sum is: "<<mdString<<endl;
+        int v1, v2, v3, v4;
+        sscanf( &mdString[0], "%x", &v1 );
+        sscanf( &mdString[8], "%x", &v2 );
+        sscanf( &mdString[16], "%x", &v3 );
+        sscanf( &mdString[24], "%x", &v4 );
+        int hash = v1 ^ v2 ^ v3 ^v4;
+        //cout<<"hash value:"<<abs(hash)<<endl;
+        return abs(hash);
+}
 
 int proxy_non_block(char host[MAX]){
 	fstream fd;
