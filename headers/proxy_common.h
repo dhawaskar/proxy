@@ -20,6 +20,16 @@
 #define MAX 100
 #define VERYLARGEMAX 1000000
 using namespace std;
+
+char * header_generation();
+void store_file(char filename[MAX],char resp_filename[MAX],char process[MAX]);
+void get_links_prefetch(char filename[MAX]);
+void get_server_process();
+void connect_process();
+void get_process();
+void client_handle();
+
+
 extern int sfd,cfd,port;
 extern struct sockaddr_in servaddr,cliaddr;
 extern socklen_t client_len;

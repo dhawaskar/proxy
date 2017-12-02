@@ -6,7 +6,7 @@
 
 using namespace std;
 
-int sfd,cfd,mfd=0,port,server_port=0,serv_flag=1,timer=0;
+int sfd,cfd,mfd=0,port,server_port=0,serv_flag=1,timer=0,prefetch_flag=0;
 struct sockaddr_in servaddr,cliaddr,main_addr;
 socklen_t client_len=sizeof(cliaddr);
 vector <string> sv;
@@ -21,7 +21,8 @@ char * header_generation(){
         strncpy(server,server_name,strlen(server_name));
         cout<<"The server name should be ****************\t"<<server<<endl;
 	bzero(header,MAXLINE);
-	strncpy(header,"GET ",strlen("GET "));
+	strncpy(header,sv[0].c_str(),strlen(sv[0].c_str()));
+	strncat(header," ",1);
 	if(strlen(file_path)>1)
 		strncat(header,file_path,strlen(file_path));
 	else	strncat(header,"/index.html",strlen("/index.html"));
@@ -56,6 +57,14 @@ void store_file(char filename[MAX],char resp_filename[MAX],char process[MAX]){
 	bzero(write_buf,MAX);
 	sprintf(write_buf,"%ld",t3);
 	cached_fd.write(write_buf,strlen(write_buf));
+	if(prefetch_flag){
+		cached_fd.write("\t",1);
+		cached_fd.write("PREFETCH",strlen("PREFETCH"));
+	}
+	else{
+		cached_fd.write("\t",1);
+		cached_fd.write("NORMAL",strlen("NORMAL"));
+	}
 	cached_fd.write("\r\n",2);
 	cached_fd.close();
 	fd.open(resp_filename,fstream::in|fstream::binary);
@@ -95,6 +104,65 @@ void store_file(char filename[MAX],char resp_filename[MAX],char process[MAX]){
 	else{
 		cout<<"Other process trying to write\n\n"<<endl;
 	}
+}
+
+
+void get_links_prefetch(char filename[MAX]){
+	char buf[MAXLINE],link_temp[MAXLINE],link_temp1[MAXLINE],temp[MAX];
+	fstream fd;
+	fd.open(filename,fstream::in|fstream::binary);
+	bzero(buf,MAXLINE);
+	while(fd.getline(buf,MAXLINE)){
+		if((strstr(buf,"<a")||(strstr(buf,"< a")))&&(strstr(buf,"href"))&&(strstr(buf,"/"))){
+			//cout<<"This has prefetch link:\t"<<buf<<endl;
+			//get the href attribute of <a> tag
+			bzero(link_temp,MAXLINE);
+			strcpy(link_temp,strstr(buf,"href=\""));
+			//cout<<link_temp<<endl;		
+			bzero(link_temp1,MAXLINE);	
+			strncpy(link_temp1,link_temp+strlen("href=\""),strlen(link_temp)-strlen("href\""));
+			bzero(link_temp,MAXLINE);
+			strcpy(link_temp,link_temp1);
+			//cout<<link_temp<<endl;			
+			bzero(link_temp1,MAXLINE);
+			strcpy(link_temp1,strtok(link_temp,"\""));
+			bzero(link_temp,MAXLINE);
+                        strcpy(link_temp,link_temp1);
+                        //cout<<link_temp<<endl;
+			bzero(file_path,MAX);
+			if(strstr(link_temp,"http")){
+				vector <string> com;
+        			string segment;
+				bzero(server_name,MAX);
+        			stringstream s(link_temp);
+        			while(getline(s,segment,':')){
+        	       			com.push_back(segment);
+        			}
+				bzero(temp,MAX);
+        			strcpy(temp,com[1].c_str());
+        			strncpy(server_name,temp+2,strlen(temp)-2);
+        			bzero(temp,MAX);
+        			if(strstr(server_name,"/")){
+               				strcpy(temp,server_name);
+                			strcpy(server_name,strtok(server_name,"/"));
+                			server_name[strlen(server_name)]='\0';
+                			strncpy(file_path,temp+(strlen(server_name)),strlen(temp)-strlen(server_name));
+        			}				
+			}
+			else{
+				if(strlen(link_temp)>2)
+				strcpy(file_path,link_temp);
+			}
+			if(strlen(file_path)>1){
+				cout<<"*****The links is*****"<<endl;
+				cout<<"The client wants connection with :"<<server_name<<"and file is \t:"<<file_path<<endl;	
+				prefetch_flag=1;
+				get_server_process();
+			}
+		}
+		bzero(buf,MAXLINE);
+	}
+	fd.close();
 }
 
 void get_server_process(){
@@ -187,12 +255,14 @@ void get_server_process(){
 					strcat(header,"\r\nConnection: Keepalive\r\n\r\n");
 					cout<<"Header to be sent\n"<<header<<endl;
 					//send the header
+					cout<<"Prefetch flag******************:\t"<<prefetch_flag<<endl;
 					send(cfd,header,strlen(header),0);
                                         fd1.open(filename,fstream::in|fstream::binary);
                                         while(!fd.eof()){
-                                              bzero(buf,MAXLINE);
-                                              fd1.read(buf,1);
-                                              send(cfd,buf,1,0);
+                                        	bzero(buf,MAXLINE);
+                                              	fd1.read(buf,1);
+						//cout<<"Prefetch flag******************:\t"<<prefetch_flag<<endl;
+                                              	send(cfd,buf,1,0);
 					}
 					fd1.close();
                                         close(mfd);
@@ -214,11 +284,14 @@ void get_server_process(){
 						strcpy(header_server,header_generation());
 						header_server[strlen(header_server)]='\0';
 						cout<<"generated header to send to main server:\n"<<header_server<<endl;
-						if(n=send(mfd,header_server,strlen(header_server),0)<0)
-							perror("sendto");	
-						else{
-							cout<<"sent the request to main server"<<endl;
-						}
+						cout<<"Prefetch flag******************:\t"<<prefetch_flag<<endl;
+						//if(!prefetch_flag){
+							if(n=send(mfd,header_server,strlen(header_server),0)<0)
+								perror("sendto");	
+							else{
+								cout<<"sent the request to main server"<<endl;
+							}
+						//}
 						cout<<"Receive the response from main server"<<endl;
 						//fd.open(filename,fstream::out|fstream::binary);	
 						bzero(resp_filename,MAX);
@@ -233,9 +306,12 @@ void get_server_process(){
 						resp_filename[strlen(resp_filename)]='\0';
 						fd2.open(resp_filename,fstream::out|fstream::binary);
 						bzero(buf,MAXLINE);
+						//receive the header
 						n=recv(mfd,buf,MAXLINE,0);
 						fd2.write(buf,n);
-						send(cfd,buf,n,0);
+						cout<<"Prefetch flag******************:\t"<<prefetch_flag<<endl;
+						//if(!prefetch_flag)     //send the header
+							send(cfd,buf,n,0);
 						int flag=VERYLARGEMAX,bytes_red=0;
 						while(flag--){
 							bzero(buf,MAXLINE);
@@ -252,21 +328,22 @@ void get_server_process(){
 							}
 							bytes_red++;
 						}
-						cout<<"*******Received from main server***********"<<endl;
-						char buf_file[MAXLINE];
-						fd3.open("temp_response",fstream::in|fstream::binary);
-						bzero(buf_file,MAXLINE);
-						while(fd3.getline(buf_file,MAXLINE)){
-							cout<<buf_file<<endl;
-							bzero(buf_file,MAXLINE);
-						}
+						cout<<"*********************Preftching development*************"<<endl;
+						cout<<"File type is:\t"<<file_type<<"and file path is:\t"<<file_path<<"file in hash value:\t"<<filename<<"Server name is:\t"<<server_name<<endl;
 						cout<<"Total bytes red\t"<<bytes_red<<endl;
-						if(serv_flag){
+						if(serv_flag|prefetch_flag){
 							cout<<"***************saving the new files*******************"<<endl;
 							store_file(filename,resp_filename,resp_temp);
 						}
 						else{
 							cout<<"*****************************Not saving file as files are sevred online because timer has expired***************************************************************************"<<endl;
+						}
+						if((strcmp(file_type,".html")==0)||(strcmp(file_type,".htm")==0)){
+							cout<<"This is the html/htm file and lets get all links saved"<<endl;
+							if(fork()==0){
+								cout<<"The child\t"<<getpid()<<"\t is created to get all links"<<endl;
+								get_links_prefetch(filename);
+							}
 						}
 						close(mfd);
 					}
