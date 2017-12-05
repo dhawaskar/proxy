@@ -307,7 +307,7 @@ void get_server_process(){
 						//receive the header
 						n=recv(mfd,buf,MAXLINE,0);
 						fd2.write(buf,n);
-						cout<<"Header received from server:\n"<<buf<<"*****\n"<<endl;
+						//cout<<"Header received from server:\n"<<buf<<"*****\n"<<endl;
 						cout<<"Prefetch flag******************:\t"<<prefetch_flag<<endl;
 						if(!prefetch_flag)     //send the header
 							send(cfd,buf,n,0);
@@ -364,11 +364,11 @@ void get_server_process(){
 			cout<<"Sorry the IP is not obtained!!!"<<endl;
 			//send the server not found
 			bzero(header_err,MAXLINE);
-		        strcpy(header_err,"HTTP/1.1 200 OK\r\nContent-Length:61\r\nContent-Type: text/html\r\nConnection: Keepalive\r\n\r\n");
+		        strcpy(header_err,"HTTP/1.1 200 OK\r\nContent-Length:72\r\nContent-Type: text/html\r\nConnection: Keepalive\r\n\r\n");
 		        cout<<"header to be sent to client is \n"<<header_err<<endl;
 		        send(cfd,header_err,strlen(header_err),0);
 		        bzero(buf,MAXLINE);
-		        strcpy(buf,"<html>\r\n<p>IP not found, give valid hostname</p>\r\n</html>\r\n\r\n");
+		        strcpy(buf,"<html>\r\n<p>404 Not Found Reason SERVER does not exist :</p>\r\n</html>\r\n\r\n");
 		        send(cfd,buf,strlen(buf),0);
 			return;
 		}	

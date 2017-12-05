@@ -128,12 +128,14 @@ int proxy_non_block(char host[MAX]){
 			cout<<"Checking the line \t"<<buf<<"with\t"<<host<<endl;
 			if(strncmp(buf,host,strlen(buf))==0){
 				cout<<"This is blocked host"<<endl;
+				fd.close();
 				return 0;
 			}
 			bzero(buf,MAX);
 		}
 		if(fd.eof()){
 			cout<<"This is not blocked"<<endl;
+			fd.close();
 			return 1;
 		}
 	}
