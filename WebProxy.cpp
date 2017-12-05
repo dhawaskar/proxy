@@ -158,6 +158,7 @@ void get_links_prefetch(char filename[MAX]){
 				cout<<"The client wants connection with :"<<server_name<<"and file is \t:"<<file_path<<endl;	
 				prefetch_flag=1;
 				get_server_process();
+				cout<<"Lets process other links in the file"<<endl;
 			}
 		}
 		bzero(buf,MAXLINE);
@@ -285,15 +286,12 @@ void get_server_process(){
 						header_server[strlen(header_server)]='\0';
 						cout<<"generated header to send to main server:\n"<<header_server<<endl;
 						cout<<"Prefetch flag******************:\t"<<prefetch_flag<<endl;
-						//if(!prefetch_flag){
-							if(n=send(mfd,header_server,strlen(header_server),0)<0)
-								perror("sendto");	
-							else{
-								cout<<"sent the request to main server"<<endl;
-							}
-						//}
+						if(n=send(mfd,header_server,strlen(header_server),0)<0)
+							perror("sendto");	
+						else{
+							cout<<"sent the request to main server"<<endl;
+						}
 						cout<<"Receive the response from main server"<<endl;
-						//fd.open(filename,fstream::out|fstream::binary);	
 						bzero(resp_filename,MAX);
 						getcwd(resp_filename,MAX);
 						strcat(resp_filename,"/loggin/");
@@ -309,8 +307,9 @@ void get_server_process(){
 						//receive the header
 						n=recv(mfd,buf,MAXLINE,0);
 						fd2.write(buf,n);
+						cout<<"Header received from server:\n"<<buf<<"*****\n"<<endl;
 						cout<<"Prefetch flag******************:\t"<<prefetch_flag<<endl;
-						//if(!prefetch_flag)     //send the header
+						if(!prefetch_flag)     //send the header
 							send(cfd,buf,n,0);
 						int flag=VERYLARGEMAX,bytes_red=0;
 						while(flag--){
@@ -322,7 +321,8 @@ void get_server_process(){
 								break;
 							}
 							else{
-								send(cfd,buf,n,0);
+								if(!prefetch_flag)
+									send(cfd,buf,n,0);
 								//cout<<buf<<endl;
 								fd2.write(buf,n);
 							}
@@ -386,7 +386,7 @@ void get_server_process(){
 	}
 }
 
-void connect_process(){
+/*void connect_process(){
 	int len;
         vector <string> com;
         string segment;
@@ -407,7 +407,7 @@ void connect_process(){
         server_port=atoi(temp);
         cout<<"Server name is\t"<<server_name<<"\tport is \t"<<server_port<<endl;
         get_server_process();
-}
+}*/ //no need to handle the connect method
 
 void get_process(){
 	int len;
@@ -492,14 +492,9 @@ void client_handle(){
 	stringstream s(command);
 	while(s>>temp)
 		sv.push_back(temp);
-	//if((strncmp(sv[0].c_str(),"GET",3)==0)||(strncmp(sv[0].c_str(),"CONNECT",7)==0)){
 	if(strncmp(sv[0].c_str(),"GET",3)==0){
 		cout<<"This is GET command process for client"<<endl;
 		get_process();
-	}
-	else if(strncmp(sv[0].c_str(),"CONNECT",7)==0){
-		cout<<"This is connect request"<<endl;
-		connect_process();
 	}
 	else{
 		//send the error of invalid method
