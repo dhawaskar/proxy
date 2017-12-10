@@ -22,6 +22,7 @@ char * header_generation(){
         cout<<"The server name should be ****************\t"<<server<<endl;
 	bzero(header,MAXLINE);
 	strncpy(header,sv[0].c_str(),strlen(sv[0].c_str()));
+	cout<<"header is \t"<<header<<endl;
 	strncat(header," ",1);
 	if(strlen(file_path)>1)
 		strncat(header,file_path,strlen(file_path));
@@ -29,11 +30,14 @@ char * header_generation(){
 	strncat(header," ",1);
 	strncat(header,sv[2].c_str(),strlen(sv[2].c_str()));
 	strncat(header,"\r\n",2);
+	cout<<"header is \t"<<header<<endl;
 	strncat(header,"HOST: ",strlen("HOST: "));
 	strncat(header,server,strlen(server));
 	strncat(header,"\r\n",2);
+	cout<<"header is \t"<<header<<endl;
 	strncat(header,"Connection: Close",strlen("Connection: Close"));
 	strncat(header,"\r\n\r\n",4);
+	cout<<"header is \t"<<header<<endl;
 	len=strlen(header);
 	header[len]='\0';
 	return header;
@@ -411,9 +415,10 @@ void get_server_process(){
 
 void get_process(){
 	int len;
+	fstream fd;
 	vector <string> com;
 	string segment;
-	char server_sock[MAX],temp_port[MAX],temp[MAX];
+	char server_sock[MAX],temp_port[MAX],temp[MAX],buf[MAXLINE];
 	len=strlen(sv[1].c_str());
 	bzero(server_sock,MAX);
 	bzero(server_name,MAX);
@@ -435,30 +440,41 @@ void get_process(){
 		server_name[strlen(server_name)]='\0';
 		strncpy(file_path,temp+(strlen(server_name)),strlen(temp)-strlen(server_name));
 	}
+	/*if(com.size()>=3){
+		strncat(file_path,com[2].c_str(),strlen(com[2].c_str()));
+	}*/
+	cout<<"I am in \t"<<__FUNCTION__<<endl;
 	cout<<"The client wants connection with :"<<server_name<<"and file is \t:"<<file_path<<endl;
-	if(com.size()>=3){
-		cout<<"Port is given"<<endl;
-		//strncpy(server_name,"http://",strlen("http://"));
-		//strcat(server_name,strtok(server_sock,":"));
-		//strcat(server_name,"/");
-		
-		cout<<"server name *****************"<<server_name<<endl;
-		//strcpy(temp_port,strtok(NULL,"NULL"));
-		//strcpy(temp_port,"80");
-		strcpy(temp_port,com[2].c_str());
-	}
-	else{
-		cout<<"port is not given"<<endl;
-		//strcpy(server_name,sv[1].c_str());
-              	//strcpy(temp_port,"8001");
-		if(strcmp(server_name,"localhost")==0)
-			strcpy(temp_port,"8001");
-		else
-			strcpy(temp_port,"80");
-	}
+	//strcpy(server_name,sv[1].c_str());
+        //strcpy(temp_port,"8001");
+	if(strcmp(server_name,"localhost")==0)
+		strcpy(temp_port,"8001");
+	else
+		strcpy(temp_port,"80");
 	server_port=atoi(temp_port);
 	cout<<"Server name is\t"<<server_name<<"\tport is \t"<<server_port<<endl;
-	get_server_process();
+	cout<<"I am getting out of \t"<<__FUNCTION__<<endl;
+	/*if(strcmp(server_name,"fonts.googleapis.com")==0){
+                cout<<"Proxy could never download this server file and hence we will take it locally"<<endl;
+		fd.open("css?family=Open+Sans:400,300,600,700",fstream::in|fstream::binary);
+		if(fd.fail()){
+			cout<<"I am in \t"<<__FUNCTION__<<endl;
+			perror("open");
+		}
+		else{
+			bzero(buf,MAXLINE);
+			strcpy(buf,"HTTP/1.1 200 OK\r\nContent-Length:9440\r\nConnection: Keepalive\r\n\r\n");
+                	send(cfd,buf,strlen(buf),0);
+               		while(!fd.eof()){
+                        	bzero(buf,MAXLINE);
+                        	fd.read(buf,1);
+                        	send(cfd,buf,1,0);
+                	}
+                	fd.close();
+		}
+        }
+        else*/
+        get_server_process();
 }
 
 void client_handle(){
@@ -551,3 +567,4 @@ int main(int argc,char **argv){
 	return 0;
 
 }
+

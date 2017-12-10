@@ -87,8 +87,10 @@ void file_type_predict(char buf[MAX]){
         //cout<<fv[fv.size()-1].c_str()<<endl;
 	if(strstr(fv[fv.size()-1].c_str(),"."))
         	strcpy(file_type,strstr(fv[fv.size()-1].c_str(),"."));
-	else
+	else{
+		cout<<"File type is not given"<<endl;
 		strcpy(file_type,"");
+	}
 }
 
 
