@@ -11,7 +11,7 @@ struct sockaddr_in servaddr,cliaddr,main_addr;
 socklen_t client_len=sizeof(cliaddr);
 vector <string> sv;
 vector <string> sv1; 
-char header[MAXLINE],server_name[MAX],header_server[MAXLINE],header_client[MAXLINE],ip_address[MAX],cached_ip[MAX],file_path[MAX],content_type[MAX],content_len[MAX],file_type[MAX],send_file_type[MAX],file_search[MAX],time_search[MAX];
+char header[MAXLINE],server_name[MAX],header_server[MAXLINE],header_client[MAXLINE],ip_address[MAX],cached_ip[MAX],file_path[MAX],content_type[MAX],content_len[MAX],file_type[MAX],send_file_type[MAX],file_search[MAX],time_search[MAX],new_header[MAXLINE];
 time_t t1,t2,t3;
 char * header_generation(){
 	cout<<"Header generation"<<endl;
@@ -26,18 +26,12 @@ char * header_generation(){
 	strncat(header," ",1);
 	if(strlen(file_path)>1)
 		strncat(header,file_path,strlen(file_path));
-	else	strncat(header,"/index.html",strlen("/index.html"));
+	else
+		strncat(header,"/",1);
 	strncat(header," ",1);
 	strncat(header,sv[2].c_str(),strlen(sv[2].c_str()));
 	strncat(header,"\r\n",2);
-	cout<<"header is \t"<<header<<endl;
-	strncat(header,"HOST: ",strlen("HOST: "));
-	strncat(header,server,strlen(server));
-	strncat(header,"\r\n",2);
-	cout<<"header is \t"<<header<<endl;
-	strncat(header,"Connection: Close",strlen("Connection: Close"));
-	strncat(header,"\r\n\r\n",4);
-	cout<<"header is \t"<<header<<endl;
+	strncat(header,new_header,strlen(new_header));
 	len=strlen(header);
 	header[len]='\0';
 	return header;
@@ -194,7 +188,7 @@ void get_server_process(){
 			if(proxy_non_block(ip_address)){
 				if(strlen(file_path)<=1){
 					bzero(file_path,MAX);
-					strcpy(file_path,"/index.html");
+					strcpy(file_path,"/");
 				}
 				char md5sum_temp[MAX];
 				cout<<"The file path is :\t*************"<<file_path<<endl;
@@ -288,7 +282,8 @@ void get_server_process(){
 						cout<<"Connection is establised with\t"<<server_name<<endl;
 						strcpy(header_server,header_generation());
 						header_server[strlen(header_server)]='\0';
-						cout<<"generated header to send to main server:\n"<<header_server<<endl;
+						//cout<<"generated header to send to main server:\n"<<header_server<<endl;
+						cout<<"New header ****"<<header_server<<endl;
 						cout<<"Prefetch flag******************:\t"<<prefetch_flag<<endl;
 						if(n=send(mfd,header_server,strlen(header_server),0)<0)
 							perror("sendto");	
@@ -479,7 +474,12 @@ void get_process(){
 
 void client_handle(){
 	int n;
-	char buf[MAXLINE],buf1[MAXLINE],header_err[MAX];
+	char buf[MAXLINE],buf1[MAXLINE],header_err[MAX],str[MAX],str1[MAX];
+	bzero(str,MAX);
+	strcpy(str,"Accept-Encoding:");
+	bzero(str1,MAX);
+        strcpy(str1,"Connection:");
+	str[strlen(str)]='\0';
 	string command,temp,command1,temp1;
 	fstream fd,fd1,fd2;
 	fd.open("temp",fstream::out);
@@ -487,19 +487,8 @@ void client_handle(){
 	n=recv(cfd,buf,MAXLINE,0);
 	t1=time(NULL);
 	cout<<"Received from client:"<<buf<<endl;
-	fd.write(buf,strlen(buf)-2);
+	fd.write(buf,strlen(buf));
 	fd.close();
-	//read hostname
-	fd2.open("temp",fstream::in);
-	bzero(buf1,MAXLINE);
-	fd2.getline(buf1,MAXLINE);
-	bzero(buf1,MAXLINE);
-        fd2.getline(buf1,MAXLINE);
-	fd2.close();
-	command1=buf1;
-	stringstream s1(command1);
-	while(s1>>temp1)
-		sv1.push_back(temp1);		
 	fd1.open("temp",fstream::in);
 	bzero(buf,MAXLINE);
 	fd1.getline(buf,MAXLINE);
@@ -508,6 +497,32 @@ void client_handle(){
 	stringstream s(command);
 	while(s>>temp)
 		sv.push_back(temp);
+	fd2.open("temp",fstream::in);
+	if(fd2.fail()){
+		cout<<"Sorry file couldnt not be opedned in client_handle"<<endl;
+		perror("open");
+	}
+	bzero(new_header,MAXLINE);
+	fd2.getline(buf,MAXLINE);
+	while(!fd2.eof()){
+		bzero(buf,MAXLINE);
+		fd2.getline(buf,MAXLINE);
+		if(strlen(buf)>2){
+			if(strncmp(str,buf,strlen(str))==0)
+				cout<<"Encoding or connectin type  has occured"<<endl;
+			else if(strncmp(str1,buf,strlen(buf1))==0)
+				cout<<"Connection type has occured"<<endl;
+			else{
+				strncat(new_header,buf,strlen(buf)-1);
+				strncat(new_header,"\r\n",2);
+			}
+		}
+	}
+	strncat(new_header,"Connection: Close",strlen("Connection: Close"));
+	strncat(new_header,"\r\n\r\n",4);
+	fd2.close();
+	cout<<"New header******************"<<endl;
+	cout<<new_header<<endl;
 	if(strncmp(sv[0].c_str(),"GET",3)==0){
 		cout<<"This is GET command process for client"<<endl;
 		get_process();
